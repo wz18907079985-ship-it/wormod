@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wormod</title>
+<style>
+:root {
+  --bg: #000;
+  --surface: #060607;
+  --line: rgba(255,255,255,.14);
+  --line-strong: rgba(255,255,255,.38);
+  --text: #ececec;
+  --sub: #8b8b90;
+  --faint: #56565c;
+  --accent: #4c9dff;
+  --danger: #ff3b30;
+  --guide: #ff2d78;
+  --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body { overflow: hidden; display: grid; grid-template-rows: 52px 1fr; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* ---------- title bar ---------- */
+.titlebar { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 500; letter-spacing: .01em; white-space: nowrap; }
+.brand-mark { width: 18px; height: 18px; border: 1.5px solid var(--text); border-radius: 4px; position: relative; }
+.brand-mark::after { content: ""; position: absolute; inset: 2.5px 7px 2.5px 2.5px; border: 1px solid var(--text); border-radius: 1px; }
+.title-sep { color: var(--faint); font-size: 14px; }
+.ws-wrap { position: relative; }
+.ws-switch { border: 1px solid var(--line); background: transparent; font-size: 13.5px; font-weight: 500; padding: 5px 9px 5px 11px; border-radius: 7px; display: flex; align-items: center; gap: 7px; }
+.ws-switch:hover, .ws-switch.open { border-color: var(--line-strong); }
+.ws-switch svg { width: 11px; height: 11px; color: var(--sub); }
+.add-ws { width: 29px; height: 29px; padding: 0; border-radius: 7px; border: 1px solid var(--line); background: transparent; font-size: 17px; font-weight: 300; line-height: 1; display: grid; place-items: center; }
+.add-ws:hover { border-color: var(--text); }
+.ws-menu { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); min-width: 210px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 9px; padding: 5px; display: none; z-index: 3000; }
+.ws-menu.show { display: block; }
+.ws-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13px; color: var(--sub); cursor: pointer; white-space: nowrap; }
+.ws-item:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.ws-item.active { color: var(--text); }
+.ws-item .check { width: 14px; text-align: center; font-size: 11px; }
+.ws-del { margin-left: auto; border: none; background: transparent; color: var(--faint); padding: 0 2px; font-size: 12px; visibility: hidden; }
+.ws-item:hover .ws-del { visibility: visible; }
+.ws-del:hover { color: var(--danger); }
+.ws-menu-foot { font: 10px var(--mono); letter-spacing: .04em; color: var(--faint); padding: 8px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line); text-transform: uppercase; }
+
+/* ---------- layout ---------- */
+
+.apply-btn { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); height: 29px; padding: 0 14px; border-radius: 7px; border: 1px solid var(--text); background: var(--text); color: #000; font-size: 12.5px; font-weight: 600; }
+.apply-btn:hover { background: #fff; }
+.apply-btn:disabled { opacity: .5; cursor: progress; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(16px); padding: 9px 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: #0b0b0c; color: var(--text); font-size: 12px; opacity: 0; transition: all .2s; pointer-events: none; z-index: 4000; max-width: 80vw; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- stage ---------- */
+.stage { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 22px 28px 18px; min-width: 0; min-height: 0; }
+
+/* ---------- screen ---------- */
+.screen {
+  position: relative;
+  width: min(100%, calc((100vh - 52px - 40px - 150px - 76px) * 1.6));
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background-color: #000;
+  background-image: radial-gradient(rgba(255,255,255,.1) 1px, transparent 1px);
+  background-size: 18px 18px;
+  box-shadow: 0 0 0 7px #000, 0 0 0 8px var(--line);
+  overflow: hidden;
+  user-select: none;
+}
+.menubar { position: absolute; inset: 0 0 auto 0; height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font: 10.5px var(--mono); color: var(--sub); background: #000; border-bottom: 1px solid var(--line); z-index: 2000; }
+.menubar .left { display: flex; gap: 14px; align-items: center; }
+.menubar .left b { font-weight: 400; color: var(--text); font-family: -apple-system, sans-serif; }
+.menubar .right { display: flex; gap: 14px; align-items: center; }
+.ws-badge { padding: 0 7px; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--text); }
+.desk { position: absolute; inset: 24px 0 0 0; }
+.desk-empty { position: absolute; inset: 0; display: grid; place-items: center; font: 11px var(--mono); letter-spacing: .04em; color: var(--sub); pointer-events: none; text-transform: uppercase; }
+
+/* ---------- module windows ---------- */
+.slot { position: absolute; padding: 5px; }
+.slot-inner { position: relative; width: 100%; height: 100%; border-radius: 8px; overflow: hidden; }
+.slot-inner.empty { border: 1px dashed var(--line-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: move; }
+.slot-inner.filled { background: var(--surface); border: 1px solid var(--line-strong); display: flex; flex-direction: column; }
+.slot.selected .slot-inner { border-color: var(--accent); }
+.slot.moving .slot-inner { border-color: var(--text); }
+.slot.drop-ok .slot-inner { border: 1px dashed var(--accent); background-color: rgba(76,157,255,.06); }
+.slot.drop-ok .slot-inner.filled::after { content: "DROP TO REPLACE"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.6); color: var(--accent); font: 11px var(--mono); letter-spacing: .08em; }
+.empty-actions { display: flex; gap: 10px; }
+.big { width: 40px; height: 34px; border-radius: 7px; border: 1px solid var(--line-strong); background: transparent; font-size: 18px; font-weight: 300; line-height: 1; display: grid; place-items: center; }
+.big:hover { border-color: var(--text); background: rgba(255,255,255,.05); }
+.hint { font: 10.5px var(--mono); color: var(--sub); text-align: center; padding: 0 10px; }
+.split-menu { display: none; gap: 6px; }
+.slot.menu-open .split-menu { display: flex; }
+.slot.menu-open .empty-actions { display: none; }
+.split-menu button { border: 1px solid var(--line-strong); background: transparent; border-radius: 6px; padding: 5px 9px; font: 10.5px var(--mono); }
+.split-menu button:hover { border-color: var(--text); }
+
+.win-bar { height: 24px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 9px; border-bottom: 1px solid var(--line); cursor: move; }
+.lights { display: flex; gap: 4px; }
+.lights i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-strong); }
+.win-title { font-size: 11px; font-weight: 500; }
+.win-body { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+
+.slot-tools { position: absolute; top: 8px; right: 22px; display: none; gap: 4px; z-index: 5; }
+.slot:hover .slot-tools, .slot.selected .slot-tools { display: flex; }
+.tool { height: 20px; min-width: 20px; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line-strong); background: #000; font: 10px var(--mono); display: grid; place-items: center; }
+.tool:hover { border-color: var(--text); }
+.tool svg { width: 12px; height: 12px; }
+
+/* red close badge */
+.x-del { position: absolute; top: -3px; right: -3px; width: 17px; height: 17px; padding: 0; border-radius: 50%; border: 1.5px solid #000; background: var(--danger); color: #fff; display: none; place-items: center; z-index: 9; transition: transform .12s; }
+.x-del svg { width: 7px; height: 7px; }
+.x-del:hover { transform: scale(1.12); }
+.float .x-del { top: -8px; right: -8px; }
+.slot:hover .x-del, .slot.selected .x-del, .float:hover .x-del, .float.selected .x-del { display: grid; }
+
+/* resize handles */
+.rh { position: absolute; z-index: 7; display: none; }
+.slot:hover .rh, .slot.selected .rh { display: block; }
+.rh.n, .rh.s { left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.rh.n { top: 0; } .rh.s { bottom: 0; }
+.rh.e, .rh.w { top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.rh.e { right: 0; } .rh.w { left: 0; }
+.rh.corner { width: 14px; height: 14px; }
+.rh.nw { left: 0; top: 0; cursor: nwse-resize; }
+.rh.se { right: 0; bottom: 0; cursor: nwse-resize; }
+.rh.sw { left: 0; bottom: 0; cursor: nesw-resize; }
+.slot.selected .rh.corner::after { content: ""; position: absolute; inset: 3px; background: #000; border: 1px solid var(--accent); border-radius: 2px; }
+
+.guide { position: absolute; z-index: 1500; pointer-events: none; background: var(--guide); }
+.guide.v { width: 1px; top: 0; bottom: 0; }
+.guide.h { height: 1px; left: 0; right: 0; }
+
+/* ---------- floating apps ---------- */
+.float { position: absolute; border-radius: 10px; cursor: move; }
+.float.selected .float-body { border-color: var(--accent); }
+.float-body { width: 100%; height: 100%; border-radius: 10px; overflow: hidden; background: var(--surface); border: 1px solid var(--line-strong); }
+.float-resize { position: absolute; right: -4px; bottom: -4px; width: 10px; height: 10px; border-radius: 2px; background: #000; border: 1px solid var(--accent); cursor: nwse-resize; display: none; }
+.float:hover .float-resize, .float.selected .float-resize { display: block; }
+.float-tag { position: absolute; left: 0; top: -19px; font: 9.5px var(--mono); letter-spacing: .06em; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--accent); color: var(--accent); background: #000; white-space: nowrap; display: none; text-transform: uppercase; }
+.float.selected .float-tag { display: block; }
+
+.f-head { display: flex; justify-content: space-between; align-items: center; font: 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; }
+.f-head span:last-child { color: var(--faint); }
+.f-memo, .f-card { height: 100%; padding: 10px 12px; font-size: 11px; line-height: 1.5; }
+.f-trans { border-bottom: 1px solid var(--line); padding: 2px 0 5px; color: var(--text); }
+.f-trans.sub { border: none; color: var(--sub); padding-top: 5px; }
+.f-memo ol { margin: 0; padding-left: 15px; }
+.f-memo li { margin-bottom: 2px; }
+.todo-item { display: flex; gap: 7px; align-items: flex-start; padding: 3px 0; }
+.todo-item i { width: 10px; height: 10px; border: 1px solid var(--line-strong); border-radius: 2px; flex: none; margin-top: 3px; position: relative; }
+.todo-item.done { color: var(--faint); text-decoration: line-through; }
+.todo-item.done i::after { content: ""; position: absolute; inset: 2px; background: var(--sub); }
+.tl { position: relative; padding-left: 14px; }
+.tl::before { content: ""; position: absolute; left: 3.5px; top: 5px; bottom: 5px; width: 1px; background: var(--line); }
+.tl-item { position: relative; padding: 2px 0 6px; color: var(--sub); }
+.tl-item::before { content: ""; position: absolute; left: -14px; top: 6px; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); }
+.tl-item.now { color: var(--text); }
+.tl-item.now::before { border-color: var(--accent); background: var(--accent); }
+.tl-item b { font: 10px var(--mono); font-weight: 400; margin-right: 7px; color: var(--faint); }
+.f-pomo { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.f-pomo svg { width: 60%; max-height: 66%; }
+.f-pomo small { font: 9px var(--mono); letter-spacing: .08em; color: var(--sub); }
+.dl-item { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.dl-item:last-child { border: none; }
+.dl-item em { font: 10px var(--mono); font-style: normal; color: var(--danger); white-space: nowrap; }
+.dl-item em.soon { color: var(--sub); }
+.f-clock { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; }
+.f-clock .t { font: 200 26px var(--mono); letter-spacing: .02em; }
+.f-clock .d { font: 9.5px var(--mono); letter-spacing: .06em; color: var(--sub); text-transform: uppercase; }
+
+/* ---------- module content ---------- */
+.win-body { display: grid; place-items: center; container-type: size; }
+.mod-logo { width: min(84px, 24cqw, 60cqh); height: auto; pointer-events: none; }
+
+/* ---------- dock ---------- */
+.dock { width: min(100%, calc((100vh - 52px - 40px - 150px - 76px) * 1.6)); display: flex; align-items: flex-end; gap: 14px; padding: 10px 14px 8px; border: 1px solid var(--line); border-radius: 14px; }
+.dock-group { display: flex; flex-direction: column; gap: 7px; flex: 2 1 0; min-width: 0; max-width: max-content; }
+.dock-group.grow { flex: 3 1 0; max-width: none; }
+.dock-label { font: 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--sub); padding-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock-label b { color: var(--text); font-weight: 400; }
+.dock-items { display: flex; gap: 6px; }
+.dock-items.scroll { overflow-x: auto; scrollbar-width: thin; scrollbar-color: #2a2a2e transparent; padding-bottom: 4px; margin-bottom: -4px;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.dock-items.scroll.at-end { -webkit-mask-image: none; mask-image: none; }
+.dock-sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 0; }
+.dock-item { flex: none; width: 58px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: grab; border-radius: 8px; border: 1px solid transparent; padding: 5px 0 4px; }
+.dock-item:hover { border-color: var(--line); }
+.dock-item:hover .ico { transform: translateY(-2px); }
+.dock-item .ico { width: 42px; height: 42px; margin: -2px 0 -3px; transition: transform .15s; pointer-events: none; }
+.dock-item span { font-size: 10px; color: var(--sub); white-space: nowrap; max-width: 56px; overflow: hidden; text-overflow: ellipsis; }
+.dock-item:hover span { color: var(--text); }
+
+/* ---------- edit bar ---------- */
+.inspector { width: min(100%, calc((100vh - 52px - 40px - 150px - 76px) * 1.6)); min-height: 60px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.ins-empty { align-self: center; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--sub); font-size: 11px; }
+.ins-empty b { font: 9px var(--mono); letter-spacing: .08em; color: var(--text); font-weight: 400; }
+.ins-empty kbd { font: 9.5px var(--mono); border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 4px; color: var(--text); }
+.sel-head { align-self: center; display: flex; align-items: center; gap: 8px; padding-right: 12px; border-right: 1px solid var(--line); min-width: 0; }
+.sel-head .ico { width: 28px; height: 28px; flex: none; }
+.sel-head .ico.placeholder { width: 24px; height: 24px; border: 1px dashed var(--line-strong); border-radius: 6px; display: grid; place-items: center; color: var(--sub); font-size: 13px; }
+.sel-head h3 { margin: 0 0 2px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.sel-head small { display: block; font: 8.5px var(--mono); letter-spacing: .06em; color: var(--sub); text-transform: uppercase; white-space: nowrap; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > label { font: 8.5px var(--mono); letter-spacing: .08em; color: var(--sub); text-transform: uppercase; }
+.input, .select { border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font-size: 11px; background: transparent; height: 25px; }
+.select { width: 104px; }
+.input { width: 120px; }
+.select option { background: #111; }
+.input::placeholder { color: var(--faint); }
+.input:focus, .select:focus, .num:focus-within { outline: none; border-color: var(--line-strong); }
+.grid4 { display: grid; grid-template-columns: repeat(4, 48px); gap: 4px; }
+.num { display: flex; align-items: center; height: 25px; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+.num span { font: 9px var(--mono); color: var(--faint); width: 10px; }
+.num input { border: none; width: 100%; min-width: 0; padding: 0 1px; font: 10.5px var(--mono); background: transparent; outline: none; }
+.num em { font: normal 9px var(--mono); color: var(--faint); }
+.num input::-webkit-inner-spin-button { display: none; }
+.place-grid { display: grid; grid-template-columns: repeat(5, 20px); grid-auto-rows: 11px; gap: 3px; }
+.place { border: 1px solid var(--line); border-radius: 2px; background: transparent; position: relative; padding: 0; }
+.place:hover { border-color: var(--line-strong); }
+.place i { position: absolute; background: rgba(255,255,255,.3); border-radius: 1px; }
+.place:hover i { background: var(--accent); }
+.btn-row { display: flex; gap: 4px; }
+.btn { height: 25px; min-width: 26px; border: 1px solid var(--line); background: transparent; padding: 0 7px; border-radius: 5px; font-size: 10.5px; white-space: nowrap; }
+.btn:hover { border-color: var(--text); }
+.btn.danger { color: var(--danger); }
+.btn.danger:hover { border-color: var(--danger); }
+.range-row { display: flex; align-items: center; gap: 6px; height: 25px; }
+.range-row input { width: 90px; accent-color: #ececec; }
+.range-row b { font: 400 10px var(--mono); width: 30px; }
+.switch { display: flex; align-items: center; height: 25px; }
+.switch input { accent-color: #ececec; width: 13px; height: 13px; margin: 0; }
+</style>
+</head>
+<body>
+
+<header class="titlebar">
+  <div class="brand"><span class="brand-mark"></span>Wormod</div>
+  <span class="title-sep">/</span>
+  <div class="ws-wrap">
+    <button class="ws-switch" id="wsSwitch"><span id="wsName"></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg></button>
+    <div class="ws-menu" id="wsMenu"></div>
+  </div>
+  <button class="add-ws" id="addWs" title="New mode">+</button>
+  <button class="apply-btn" id="applyBtn" title="Lay out this mode on your desktop">Apply ▸</button>
+</header>
+<div class="toast" id="toast"></div>
+
+  <section class="stage">
+    <div class="screen" id="screen">
+      <div class="menubar">
+        <div class="left"><b>&#63743;</b><span>Finder</span><span class="ws-badge" id="mbWs"></span></div>
+        <div class="right"><span>Wi‑Fi</span><span>Search</span><span id="mbClock"></span></div>
+      </div>
+      <div class="desk" id="desk"></div>
+    </div>
+
+    <div class="dock" id="dock">
+      <div class="dock-group grow">
+        <div class="dock-label"><b>Module Apps</b> · drag in · scroll →</div>
+        <div class="dock-items scroll" id="dockModules"></div>
+      </div>
+      <div class="dock-sep"></div>
+      <div class="dock-group">
+        <div class="dock-label"><b>Floating Apps</b> · drop anywhere</div>
+        <div class="dock-items scroll" id="dockFloats"></div>
+      </div>
+    </div>
+    <div class="inspector" id="inspector"></div>
+  </section>
+
+<script>
+const APPS = {
+  overleaf: { name: "Overleaf", kind: "module", icon: "icons/overleaf.png", url: "https://www.overleaf.com/project" },
+  zotero:   { name: "Zotero",   kind: "module", icon: "icons/zotero.png", path: "/Applications/Zotero.app" },
+  safari:   { name: "Safari",   kind: "module", icon: "icons/safari.png", path: "/Applications/Safari.app" },
+  preview:  { name: "Preview",     kind: "module", icon: "icons/preview.png", path: "/System/Applications/Preview.app" },
+  notion:   { name: "Notion",   kind: "module", icon: "icons/notion.png", url: "https://www.notion.so" },
+  obsidian: { name: "Obsidian", kind: "module", icon: "icons/obsidian.png", path: "/Applications/Obsidian.app" },
+  word:     { name: "Word",     kind: "module", icon: "icons/word.png", path: "/Applications/Microsoft Word.app" },
+  figma:    { name: "Figma",    kind: "module", icon: "icons/figma.png", path: "/Applications/Figma.app" },
+  chatgpt:  { name: "ChatGPT",  kind: "module", icon: "icons/chatgpt.png", path: "/Applications/ChatGPT.app" },
+  cursor:   { name: "Cursor",   kind: "module", icon: "icons/cursor.png", path: "/Applications/Cursor.app" },
+  weread:   { name: "WeRead",  kind: "module", icon: "icons/weread.png", path: "/Applications/微信读书.app" },
+  chrome:   { name: "Chrome",   kind: "module", icon: "icons/chrome.png", path: "/Applications/Google Chrome.app" },
+  edge:     { name: "Edge",     kind: "module", icon: "icons/edge.png", path: "/Applications/Microsoft Edge.app" },
+  vscode:   { name: "VS Code",  kind: "module", icon: "icons/vscode.png", path: "/Applications/Visual Studio Code.app" },
+  terminal: { name: "Terminal",      kind: "module", icon: "icons/terminal.png", path: "/System/Applications/Utilities/Terminal.app" },
+  finder:   { name: "Finder",      kind: "module", icon: "icons/finder.png", path: "/System/Library/CoreServices/Finder.app" },
+  notes:    { name: "Notes",    kind: "module", icon: "icons/notes.png", path: "/System/Applications/Notes.app" },
+  textedit: { name: "TextEdit",  kind: "module", icon: "icons/textedit.png", path: "/System/Applications/TextEdit.app" },
+  pages:    { name: "Pages",    kind: "module", icon: "icons/pages.png", path: "/Applications/Pages.app" },
+  keynote:  { name: "Keynote",  kind: "module", icon: "icons/keynote.png", path: "/Applications/Keynote.app" },
+  numbers:  { name: "Numbers",  kind: "module", icon: "icons/numbers.png", path: "/Applications/Numbers.app" },
+  powerpoint: { name: "PowerPoint", kind: "module", icon: "icons/powerpoint.png", path: "/Applications/Microsoft PowerPoint.app" },
+  wps:      { name: "WPS",      kind: "module", icon: "icons/wps.png", path: "/Applications/wpsoffice.app" },
+  xmind:    { name: "Xmind",    kind: "module", icon: "icons/xmind.png", path: "/Applications/Xmind.app" },
+  freeform: { name: "Freeform",    kind: "module", icon: "icons/freeform.png", path: "/System/Applications/Freeform.app" },
+  books:    { name: "Books",      kind: "module", icon: "icons/books.png", path: "/System/Applications/Books.app" },
+  grammarly:{ name: "Grammarly", kind: "module", icon: "icons/grammarly.png", path: "/Applications/Grammarly Desktop.app" },
+  eudic:    { name: "Eudic",  kind: "module", icon: "icons/eudic.png", path: "/Applications/Eudic.app" },
+  photoshop:{ name: "Photoshop", kind: "module", icon: "icons/photoshop.png", path: "/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app" },
+  rhino:    { name: "Rhino",    kind: "module", icon: "icons/rhino.png", path: "/Applications/Rhino 7.app" },
+  keyshot:  { name: "KeyShot",  kind: "module", icon: "icons/keyshot.png", path: "/Applications/KeyShot10.app" },
+  mail:     { name: "Mail",      kind: "module", icon: "icons/mail.png", path: "/System/Applications/Mail.app" },
+  outlook:  { name: "Outlook",  kind: "module", icon: "icons/outlook.png", path: "/Applications/Microsoft Outlook.app" },
+  teams:    { name: "Teams",    kind: "module", icon: "icons/teams.png", path: "/Applications/Microsoft Teams.app" },
+  tencentmeeting: { name: "VooV Meeting", kind: "module", icon: "icons/tencentmeeting.png", path: "/Applications/TencentMeeting.app" },
+  zoom:     { name: "Zoom",     kind: "module", icon: "icons/zoom.png", path: "/Applications/zoom.us.app" },
+  netease:  { name: "NetEase Music", kind: "module", icon: "icons/netease.png", path: "/Applications/NeteaseMusic.app" },
+  wechat:   { name: "WeChat",      kind: "module", icon: "icons/wechat.png", path: "/Applications/WeChat.app" },
+  qq:       { name: "QQ",       kind: "module", icon: "icons/qq.png", path: "/Applications/QQ.app" },
+  rednote:  { name: "RedNote",    kind: "module", icon: "icons/rednote.png", path: "/Applications/rednote.app" },
+
+  memo:     { name: "Memo",     kind: "float", icon: "icons/memo.png",      size: [22, 24], path: "/Applications/Memo.app" },
+  baidutrans: { name: "Baidu Translate", kind: "float", icon: "icons/baidutrans.png", size: [19, 17], path: "/Applications/百度翻译.app" },
+  todo:     { name: "To-do",     kind: "float", icon: "icons/reminders.png", source: "Reminders", size: [21, 27] },
+  timeline: { name: "Timeline",  kind: "float", icon: "icons/calendar.png",  source: "Calendar", size: [20, 32] },
+  pomodoro: { name: "Pomodoro",  kind: "float", icon: "icons/pomodoro.svg",  source: "built-in", size: [14, 22] },
+  deadline: { name: "Due Today", kind: "float", icon: "icons/deadline.svg",  source: "Calendar + Reminders", size: [22, 22] },
+  clock:    { name: "Clock",     kind: "float", icon: "icons/clock.png",     size: [16, 15] },
+};
+const iconImg = (a, cls) => `<img class="${cls}" src="${a.icon}" alt="" draggable="false">`;
+
+const PLACES = {
+  full: [0, 0, 100, 100], left: [0, 0, 50, 100], right: [50, 0, 50, 100], top: [0, 0, 100, 50], bottom: [0, 50, 100, 50],
+  tl: [0, 0, 50, 50], tr: [50, 0, 50, 50], bl: [0, 50, 50, 50], br: [50, 50, 50, 50], third: [0, 0, 100 / 3, 100],
+};
+const PLACE_LABELS = { full: "Full screen", left: "Left half", right: "Right half", top: "Top half", bottom: "Bottom half",
+  tl: "Top left", tr: "Top right", bl: "Bottom left", br: "Bottom right", third: "Left third" };
+const MIN_MOD = 10, MIN_FLOAT = 8, SNAP_PX = 8;
+
+const LEGACY_NAMES = { "论文模式": "Thesis Mode", "文献阅读": "Reading Mode", "设计模式": "Design Mode", "新模式": "New Mode" };
+const STORE_KEY = "workbench-editor-v1";
+const uid = () => Math.random().toString(36).slice(2, 9);
+const mod = (app, x, y, w, h) => ({ id: uid(), app, target: "", x, y, w, h });
+const fl = (app, x, y, w, h) => ({ id: uid(), app, x, y, w, h, opacity: 1, top: true });
+
+function defaultWorkspaces() {
+  return [
+    {
+      id: uid(), name: "Thesis Mode",
+      modules: [mod(null, 0, 0, 50, 36), mod("overleaf", 0, 36, 50, 64), mod("zotero", 50, 0, 50, 100)],
+      floats: [fl("memo", 74.5, 3, 23, 23)],
+    },
+    {
+      id: uid(), name: "Reading Mode",
+      modules: [mod("zotero", 0, 0, 36, 100), mod("preview", 36, 0, 64, 100)],
+      floats: [fl("todo", 76, 3.5, 21, 27), fl("pomodoro", 82, 72, 14, 22)],
+    },
+    {
+      id: uid(), name: "Design Mode",
+      modules: [mod("figma", 0, 0, 70, 100), mod("chatgpt", 70, 0, 30, 55), mod("notion", 70, 55, 30, 45)],
+      floats: [fl("timeline", 2.5, 60, 18, 34)],
+    },
+  ];
+}
+
+let state = loadState() || { workspaces: defaultWorkspaces(), current: 0 };
+let selected = null;
+let menuSlot = null;
+let dragPayload = null;
+let guides = [];
+let activeId = null;
+let suppressClick = false;
+
+const $ = (id) => document.getElementById(id);
+const desk = $("desk");
+const ws = () => state.workspaces[state.current];
+const findMod = (id) => ws().modules.find((m) => m.id === id);
+const findFloat = (id) => ws().floats.find((f) => f.id === id);
+const isSel = (kind, id) => selected && selected.kind === kind && selected.id === id;
+
+function loadState() {
+  try {
+    const s = window.__SAVED_STATE__ || JSON.parse(localStorage.getItem(STORE_KEY));
+    if (!s) return null;
+    s.workspaces.forEach(migrateLayout);
+    s.workspaces.forEach((w) => { if (LEGACY_NAMES[w.name]) w.name = LEGACY_NAMES[w.name]; });
+    return s;
+  } catch { return null; }
+}
+
+/* older saves stored modules as a split tree */
+function migrateLayout(w) {
+  if (w.modules) return;
+  w.modules = [];
+  const walk = (node, r) => {
+    if (node.type === "slot") { w.modules.push({ ...mod(node.app, r.x, r.y, r.w, r.h), target: node.target || "" }); return; }
+    const k = node.ratio;
+    if (node.dir === "row") { walk(node.a, { x: r.x, y: r.y, w: r.w * k, h: r.h }); walk(node.b, { x: r.x + r.w * k, y: r.y, w: r.w * (1 - k), h: r.h }); }
+    else { walk(node.a, { x: r.x, y: r.y, w: r.w, h: r.h * k }); walk(node.b, { x: r.x, y: r.y + r.h * k, w: r.w, h: r.h * (1 - k) }); }
+  };
+  if (w.layout) walk(w.layout, { x: 0, y: 0, w: 100, h: 100 });
+  delete w.layout;
+}
+
+const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.native;
+function save() {
+  const json = JSON.stringify(state);
+  localStorage.setItem(STORE_KEY, json);
+  if (native) native.postMessage({ type: "save", state: json });
+}
+
+function toast(msg, ms = 3200) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), ms);
+}
+window.nativeToast = (msg) => { $("applyBtn").disabled = false; toast(msg, 6000); };
+
+/* ---------- apply ---------- */
+const frame = (r) => ({ x: round1(r.x), y: round1(r.y), w: round1(r.w), h: round1(r.h) });
+function toRecipe(w) {
+  return {
+    name: w.name,
+    modules: w.modules.filter((m) => m.app).map((m) => {
+      const a = APPS[m.app];
+      return { id: m.app, name: a.name, path: a.path || "", url: a.url || "", target: m.target || "", frame: frame(m) };
+    }),
+    floats: w.floats.map((f) => {
+      const a = APPS[f.app];
+      return { id: f.app, name: a.name, path: a.path || "", frame: frame(f), opacity: f.opacity, top: f.top };
+    }),
+  };
+}
+
+function floatContent(app) {
+  switch (app) {
+    case "memo":
+      return `<div class="f-memo"><div class="f-head"><span>Memo</span><span>···</span></div>
+        <ol><li>writing template</li><li>data coding for students’ research plan presentation.</li><li>Nexa polish (keep monitoring)</li></ol></div>`;
+    case "todo":
+      return `<div class="f-card"><div class="f-head"><span>To-do</span><span>1 / 4</span></div>
+        <div class="todo-item done"><i></i>Add 3 Zotero citations</div>
+        <div class="todo-item"><i></i>Revise intro, para 2</div>
+        <div class="todo-item"><i></i>Clean up Methods Fig 5</div>
+        <div class="todo-item"><i></i>Reply to advisor</div></div>`;
+    case "timeline":
+      return `<div class="f-card"><div class="f-head"><span>Today</span><span>Oct 7</span></div><div class="tl">
+        <div class="tl-item"><b>09:00</b>Literature review</div>
+        <div class="tl-item now"><b>14:00</b>Write Methods</div>
+        <div class="tl-item"><b>16:30</b>Revise Fig 5</div>
+        <div class="tl-item"><b>19:30</b>Lab meeting</div></div></div>`;
+    case "pomodoro":
+      return `<div class="f-pomo"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.16)" stroke-width="1.5"/>
+        <circle cx="50" cy="50" r="42" fill="none" stroke="#ececec" stroke-width="1.5" stroke-dasharray="264" stroke-dashoffset="80" transform="rotate(-90 50 50)"/>
+        <text x="50" y="55" text-anchor="middle" font-size="15" font-weight="300" fill="#ececec" font-family="SF Mono, Menlo, monospace">34:12</text></svg><small>FOCUS · THESIS</small></div>`;
+    case "deadline":
+      return `<div class="f-card"><div class="f-head"><span>Due Today</span><span>3</span></div>
+        <div class="dl-item"><span>CHI 2027 rebuttal</span><em class="soon">2d</em></div>
+        <div class="dl-item"><span>Finalize Fig 5</span><em>Today</em></div>
+        <div class="dl-item"><span>Merchant app draft</span><em>Overdue</em></div></div>`;
+    case "baidutrans":
+      return `<div class="f-card"><div class="f-head"><span>Translate</span><span>EN ⇄ 中</span></div>
+        <div class="f-trans">significance</div><div class="f-trans sub">意义；重要性</div></div>`;
+    case "clock":
+      return `<div class="f-clock"><div class="t" data-live="time"></div><div class="d" data-live="date"></div></div>`;
+  }
+  return "";
+}
+
+const ICON = {
+  splitRow: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M8 2.5v11"/></svg>`,
+  splitCol: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M1.5 8h13"/></svg>`,
+  x: `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5"/></svg>`,
+};
+
+/* ---------- render ---------- */
+function render() {
+  renderTitle();
+  renderDesk();
+  renderInspector();
+  $("mbWs").textContent = ws().name;
+  save();
+}
+
+function renderTitle() {
+  $("wsName").textContent = ws().name;
+  $("wsMenu").innerHTML = state.workspaces.map((w, i) =>
+    `<div class="ws-item ${i === state.current ? "active" : ""}" data-i="${i}" title="Double-click to rename">
+      <span class="check">${i === state.current ? "✓" : ""}</span>${esc(w.name)}
+      ${state.workspaces.length > 1 ? `<button class="ws-del" data-del="${i}" title="Delete this mode">✕</button>` : ""}</div>`).join("")
+    + `<div class="ws-menu-foot">Double-click to rename</div>`;
+}
+
+function renderDesk() {
+  const w = ws();
+  let html = w.modules.map(moduleHTML).join("") + w.floats.map(floatHTML).join("");
+  html += guides.map((g) => `<div class="guide ${g.axis}" style="${g.axis === "v" ? "left" : "top"}:${g.at}%"></div>`).join("");
+  if (!w.modules.length && !w.floats.length) html += `<div class="desk-empty">Drag an app from the dock to start</div>`;
+  desk.innerHTML = html;
+  tickClock();
+}
+
+function moduleHTML(m, i) {
+  const cls = ["slot", isSel("slot", m.id) && "selected", menuSlot === m.id && "menu-open", activeId === m.id && "moving"].filter(Boolean).join(" ");
+  const style = `left:${m.x}%;top:${m.y}%;width:${m.w}%;height:${m.h}%;z-index:${i + 1}`;
+  const chrome = `<div class="slot-tools">
+      <button class="tool" data-act="split-row" title="Split left / right">${ICON.splitRow}</button>
+      <button class="tool" data-act="split-col" title="Split top / bottom">${ICON.splitCol}</button>
+      ${m.app ? `<button class="tool" data-act="clear" title="Clear">Clear</button>` : ""}</div>
+    <button class="x-del" data-act="remove" title="Delete module">${ICON.x}</button>
+    ${["n", "s", "e", "w", "nw", "sw", "se"].map((d) => `<span class="rh ${d}${d.length === 2 ? " corner" : ""}" data-rh="${d}"></span>`).join("")}`;
+  if (!m.app) {
+    return `<div class="${cls}" data-slot="${m.id}" style="${style}">
+      <div class="slot-inner empty" data-move="1">
+        <div class="empty-actions"><button class="big" data-act="split-menu" title="Split into a new module">+</button><button class="big" data-act="remove" title="Delete module">−</button></div>
+        <div class="split-menu"><button data-act="split-row">Split ↔</button><button data-act="split-col">Split ↕</button><button data-act="split-cancel">Cancel</button></div>
+        <div class="hint">Drop a module app here, or use + / − to add or remove modules</div>
+      </div>${chrome}</div>`;
+  }
+  const a = APPS[m.app];
+  return `<div class="${cls}" data-slot="${m.id}" style="${style}">
+    <div class="slot-inner filled">
+      <div class="win-bar" data-move="1"><span class="lights"><i></i><i></i><i></i></span><span class="win-title">${a.name}</span></div>
+      <div class="win-body">${iconImg(a, "mod-logo")}</div>
+    </div>${chrome}</div>`;
+}
+
+function floatHTML(f) {
+  const a = APPS[f.app];
+  const sel = isSel("float", f.id) ? "selected" : "";
+  return `<div class="float ${sel}" data-float="${f.id}" style="left:${f.x}%;top:${f.y}%;width:${f.w}%;height:${f.h}%;opacity:${f.opacity};z-index:${f.top ? 1001 : 1000}">
+    <div class="float-body">${floatContent(f.app)}</div>
+    <button class="x-del" data-act="del-float" title="Remove">${ICON.x}</button>
+    <span class="float-resize" data-rh="se"></span>
+    <span class="float-tag">${a.name}</span></div>`;
+}
+
+function renderDock() {
+  const item = (id) => {
+    const a = APPS[id];
+    return `<div class="dock-item" draggable="true" data-app="${id}" title="${a.source ? `${a.name} · from ${a.source}` : a.name}">
+      ${iconImg(a, "ico")}<span>${a.name}</span></div>`;
+  };
+  const ids = Object.keys(APPS);
+  $("dockModules").innerHTML = ids.filter((id) => APPS[id].kind === "module").map(item).join("");
+  $("dockFloats").innerHTML = ids.filter((id) => APPS[id].kind === "float").map(item).join("");
+}
+
+const dockRows = [$("dockModules"), $("dockFloats")];
+const updateDockFade = () => dockRows.forEach((r) => r.classList.toggle("at-end", r.scrollLeft + r.clientWidth >= r.scrollWidth - 2));
+dockRows.forEach((r) => {
+  r.addEventListener("scroll", updateDockFade);
+  r.addEventListener("wheel", (e) => {
+    if (r.scrollWidth > r.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { r.scrollLeft += e.deltaY; e.preventDefault(); }
+  }, { passive: false });
+});
+window.addEventListener("resize", updateDockFade);
+
+/* ---------- inspector ---------- */
+const numField = (obj, k, label, attr) =>
+  `<div class="num"><span>${label}</span><input type="number" step="0.5" value="${round1(obj[k])}" ${attr}="${k}"></div>`;
+
+function renderInspector() {
+  const el = $("inspector");
+  const w = ws();
+  if (selected && selected.kind === "slot") {
+    const m = findMod(selected.id);
+    if (!m) { selected = null; return renderInspector(); }
+    const a = m.app ? APPS[m.app] : null;
+    const placeBtn = (k) => {
+      const [x, y, pw, ph] = PLACES[k];
+      const f = (v) => `calc(2px + ${v / 100} * (100% - 4px))`;
+      return `<button class="place" data-place="${k}" title="${PLACE_LABELS[k]}"><i style="left:${f(x)};top:${f(y)};width:calc(${f(pw)} - 3px);height:calc(${f(ph)} - 3px)"></i></button>`;
+    };
+    el.innerHTML = `
+      <div class="field"><label>App</label>
+        <select class="select" data-set-app="${m.id}"><option value="">— Empty —</option>
+        ${Object.keys(APPS).filter((k) => APPS[k].kind === "module").map((k) =>
+          `<option value="${k}" ${m.app === k ? "selected" : ""}>${APPS[k].name}</option>`).join("")}</select></div>
+      ${a ? `<div class="field"><label>Open</label><input class="input" placeholder="URL or file" data-target="${m.id}" value="${esc(m.target || "")}"></div>` : ""}
+      <div class="field"><label>Frame %</label><div class="grid4">${["x", "y", "w", "h"].map((k) => numField(m, k, k.toUpperCase(), "data-mnum")).join("")}</div></div>
+      <div class="field"><label>Quick place</label><div class="place-grid">${Object.keys(PLACES).map(placeBtn).join("")}</div></div>
+      <div class="field"><label>Structure</label><div class="btn-row">
+        <button class="btn" data-act="split-row" data-slot-id="${m.id}" title="Split left / right">↔</button>
+        <button class="btn" data-act="split-col" data-slot-id="${m.id}" title="Split top / bottom">↕</button>
+        <button class="btn danger" data-act="remove" data-slot-id="${m.id}">Delete</button></div></div>`;
+    return;
+  }
+  if (selected && selected.kind === "float") {
+    const f = findFloat(selected.id);
+    if (!f) { selected = null; return renderInspector(); }
+    const a = APPS[f.app];
+    el.innerHTML = `
+      <div class="sel-head">${iconImg(a, "ico")}
+        <div><h3>${a.name}</h3><small>Floating${a.source ? ` · from ${a.source}` : ""}</small></div></div>
+      <div class="field"><label>Frame %</label><div class="grid4">${["x", "y", "w", "h"].map((k) => numField(f, k, k.toUpperCase(), "data-fnum")).join("")}</div></div>
+      <div class="field"><label>Opacity</label><div class="range-row"><input type="range" min="40" max="100" value="${Math.round(f.opacity * 100)}" data-opacity="1"><b>${Math.round(f.opacity * 100)}%</b></div></div>
+      <div class="field"><label>On top</label><span class="switch"><input type="checkbox" ${f.top ? "checked" : ""} data-top="1"></span></div>
+      <div class="field"><label>Corner</label><div class="btn-row">
+        <button class="btn" data-corner="tl" title="Top left">↖</button><button class="btn" data-corner="tr" title="Top right">↗</button>
+        <button class="btn" data-corner="bl" title="Bottom left">↙</button><button class="btn" data-corner="br" title="Bottom right">↘</button></div></div>
+      <div class="field"><label>&nbsp;</label><button class="btn danger" data-act="del-float" data-float-id="${f.id}">Remove</button></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="ins-empty"><b>NOTHING SELECTED</b>
+    <span>Click a module or floating app to edit it · drag title bars to move, edges to resize · hold <kbd>⌥</kbd> to turn off snapping</span></div>`;
+}
+
+$("inspector").addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.dataset.target) { findMod(t.dataset.target).target = t.value; save(); return; }
+  const k = t.dataset.mnum || t.dataset.fnum;
+  if (k) {
+    const item = t.dataset.mnum ? findMod(selected.id) : findFloat(selected.id);
+    const v = Number(t.value);
+    if (!item || !Number.isFinite(v)) return;
+    const min = t.dataset.mnum ? MIN_MOD : MIN_FLOAT;
+    if (k === "x") item.x = clamp(v, 0, 100 - item.w);
+    if (k === "y") item.y = clamp(v, 0, 100 - item.h);
+    if (k === "w") item.w = clamp(v, min, 100 - item.x);
+    if (k === "h") item.h = clamp(v, min, 100 - item.y);
+    renderDesk(); save(); return;
+  }
+  if (t.dataset.opacity) {
+    findFloat(selected.id).opacity = Number(t.value) / 100;
+    t.nextElementSibling.textContent = t.value + "%";
+    renderDesk(); save();
+  }
+});
+
+$("inspector").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.setApp) { const m = findMod(t.dataset.setApp); m.app = t.value || null; m.target = ""; return render(); }
+  if (t.dataset.top) { findFloat(selected.id).top = t.checked; return render(); }
+  if (t.dataset.mnum || t.dataset.fnum) render();
+});
+
+$("inspector").addEventListener("click", (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.place) {
+    const m = findMod(selected.id);
+    [m.x, m.y, m.w, m.h] = PLACES[t.dataset.place].map(round1);
+    raise(m.id);
+    return render();
+  }
+  if (t.dataset.corner) {
+    const f = findFloat(selected.id);
+    const g = 2.5;
+    f.x = t.dataset.corner.endsWith("l") ? g : round1(100 - f.w - g);
+    f.y = t.dataset.corner.startsWith("t") ? g + 0.5 : round1(100 - f.h - g);
+    return render();
+  }
+  if (t.dataset.slotId) return doModAction(t.dataset.act, t.dataset.slotId);
+  if (t.dataset.act === "del-float") { removeFloat(t.dataset.floatId); render(); }
+});
+
+/* ---------- actions ---------- */
+function raise(id) {
+  const list = ws().modules;
+  const i = list.findIndex((m) => m.id === id);
+  if (i >= 0 && i < list.length - 1) list.push(list.splice(i, 1)[0]);
+}
+
+function removeModule(id) {
+  ws().modules = ws().modules.filter((m) => m.id !== id);
+  if (isSel("slot", id)) selected = null;
+  menuSlot = null;
+}
+function removeFloat(id) {
+  ws().floats = ws().floats.filter((f) => f.id !== id);
+  if (isSel("float", id)) selected = null;
+}
+
+function doModAction(act, id) {
+  const w = ws();
+  const m = findMod(id);
+  if (!m) return;
+  if (act === "split-menu") { menuSlot = id; selected = { kind: "slot", id }; }
+  else if (act === "split-cancel") { menuSlot = null; }
+  else if (act === "split-row" || act === "split-col") {
+    const row = act === "split-row";
+    const half = round1((row ? m.w : m.h) / 2);
+    const fresh = row ? mod(null, m.x + half, m.y, m.w - half, m.h) : mod(null, m.x, m.y + half, m.w, m.h - half);
+    if (row) m.w = half; else m.h = half;
+    w.modules.splice(w.modules.indexOf(m) + 1, 0, fresh);
+    menuSlot = null;
+    selected = { kind: "slot", id: fresh.id };
+  } else if (act === "clear") {
+    m.app = null; m.target = "";
+  } else if (act === "remove") {
+    removeModule(id);
+  }
+  render();
+}
+
+desk.addEventListener("click", (e) => {
+  if (suppressClick) { suppressClick = false; return; }
+  const btn = e.target.closest("[data-act]");
+  const slotEl = e.target.closest(".slot");
+  const floatEl = e.target.closest(".float");
+  if (btn && slotEl) return doModAction(btn.dataset.act, slotEl.dataset.slot);
+  if (btn && floatEl) { removeFloat(floatEl.dataset.float); return render(); }
+  if (slotEl || floatEl) return;
+  selected = null; menuSlot = null;
+  render();
+});
+
+desk.addEventListener("pointerdown", (e) => {
+  suppressClick = false;
+  if (e.button !== 0 || e.target.closest("[data-act]")) return;
+  const floatEl = e.target.closest(".float");
+  if (floatEl) {
+    const f = findFloat(floatEl.dataset.float);
+    selected = { kind: "float", id: f.id }; menuSlot = null;
+    return startRect(e, f, "float", e.target.closest("[data-rh]") ? "se" : "move");
+  }
+  const slotEl = e.target.closest(".slot");
+  if (!slotEl) return;
+  const id = slotEl.dataset.slot;
+  raise(id);
+  selected = { kind: "slot", id };
+  if (menuSlot !== id) menuSlot = null;
+  const rh = e.target.closest("[data-rh]");
+  const dir = rh ? rh.dataset.rh : e.target.closest("[data-move]") ? "move" : null;
+  suppressClick = true;
+  if (dir) return startRect(e, findMod(id), "mod", dir);
+  render();
+});
+
+/* ---------- free move / resize with snapping ---------- */
+function snapLines(selfId, kind) {
+  const xs = [0, 50, 100, 100 / 3, 200 / 3], ys = [0, 50, 100, 100 / 3, 200 / 3];
+  const others = kind === "mod" ? ws().modules : [...ws().modules, ...ws().floats];
+  others.forEach((o) => { if (o.id !== selfId) { xs.push(o.x, o.x + o.w); ys.push(o.y, o.y + o.h); } });
+  return { xs, ys };
+}
+function nearest(values, cands, thr) {
+  let best = null;
+  for (const v of values) for (const c of cands) {
+    const d = Math.abs(c - v);
+    if (d <= thr && (!best || d < best.d)) best = { d, delta: c - v, at: c };
+  }
+  return best;
+}
+
+function startRect(e, item, kind, dir) {
+  e.preventDefault();
+  suppressClick = true;
+  activeId = item.id;
+  render();
+  const box = desk.getBoundingClientRect();
+  const sx = e.clientX, sy = e.clientY;
+  const start = { ...item };
+  const lines = snapLines(item.id, kind);
+  const tx = (SNAP_PX / box.width) * 100, ty = (SNAP_PX / box.height) * 100;
+  const min = kind === "mod" ? MIN_MOD : MIN_FLOAT;
+
+  const move = (ev) => {
+    const dx = ((ev.clientX - sx) / box.width) * 100;
+    const dy = ((ev.clientY - sy) / box.height) * 100;
+    const free = ev.altKey;
+    guides = [];
+    const snapTo = (v, cands, thr, axis) => {
+      if (free) return v;
+      const b = nearest([v], cands, thr);
+      if (!b) return v;
+      guides.push({ axis, at: b.at });
+      return b.at;
+    };
+    if (dir === "move") {
+      item.x = clamp(start.x + dx, 0, 100 - item.w);
+      item.y = clamp(start.y + dy, 0, 100 - item.h);
+      if (!free) {
+        const bx = nearest([item.x, item.x + item.w, item.x + item.w / 2], lines.xs, tx);
+        if (bx) { item.x = clamp(item.x + bx.delta, 0, 100 - item.w); guides.push({ axis: "v", at: bx.at }); }
+        const by = nearest([item.y, item.y + item.h, item.y + item.h / 2], lines.ys, ty);
+        if (by) { item.y = clamp(item.y + by.delta, 0, 100 - item.h); guides.push({ axis: "h", at: by.at }); }
+      }
+    } else {
+      if (dir.includes("e")) item.w = clamp(snapTo(start.x + start.w + dx, lines.xs, tx, "v") - start.x, min, 100 - start.x);
+      if (dir.includes("s")) item.h = clamp(snapTo(start.y + start.h + dy, lines.ys, ty, "h") - start.y, min, 100 - start.y);
+      if (dir.includes("w")) {
+        const l = clamp(snapTo(start.x + dx, lines.xs, tx, "v"), 0, start.x + start.w - min);
+        item.x = l; item.w = start.x + start.w - l;
+      }
+      if (dir.includes("n")) {
+        const t = clamp(snapTo(start.y + dy, lines.ys, ty, "h"), 0, start.y + start.h - min);
+        item.y = t; item.h = start.y + start.h - t;
+      }
+    }
+    renderDesk(); renderInspector();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    ["x", "y", "w", "h"].forEach((k) => (item[k] = round1(item[k])));
+    guides = []; activeId = null;
+    render();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+/* ---------- drag & drop from dock ---------- */
+document.addEventListener("dragstart", (e) => {
+  const dockItem = e.target.closest(".dock-item");
+  if (!dockItem) return;
+  dragPayload = { app: dockItem.dataset.app };
+  e.dataTransfer.setData("text/plain", dragPayload.app);
+  e.dataTransfer.effectAllowed = "copy";
+});
+document.addEventListener("dragend", () => { dragPayload = null; clearDropHints(); });
+
+function clearDropHints() { desk.querySelectorAll(".drop-ok").forEach((n) => n.classList.remove("drop-ok")); }
+
+desk.addEventListener("dragover", (e) => {
+  if (!dragPayload) return;
+  e.preventDefault();
+  clearDropHints();
+  if (APPS[dragPayload.app].kind === "module") {
+    const slotEl = e.target.closest(".slot");
+    if (slotEl) slotEl.classList.add("drop-ok");
+  }
+});
+desk.addEventListener("dragleave", (e) => { if (!desk.contains(e.relatedTarget)) clearDropHints(); });
+
+desk.addEventListener("drop", (e) => {
+  if (!dragPayload) return;
+  e.preventDefault();
+  const p = dragPayload;
+  dragPayload = null;
+  clearDropHints();
+  const a = APPS[p.app];
+  const box = desk.getBoundingClientRect();
+  const px = ((e.clientX - box.left) / box.width) * 100;
+  const py = ((e.clientY - box.top) / box.height) * 100;
+  if (a.kind === "float") {
+    const [w, h] = a.size;
+    const f = fl(p.app, round1(clamp(px - w / 2, 0, 100 - w)), round1(clamp(py - h / 2, 0, 100 - h)), w, h);
+    ws().floats.push(f);
+    selected = { kind: "float", id: f.id };
+    return render();
+  }
+  const slotEl = e.target.closest(".slot");
+  if (slotEl) {
+    const target = findMod(slotEl.dataset.slot);
+    target.app = p.app;
+    target.target = "";
+    selected = { kind: "slot", id: target.id };
+  } else {
+    const w = 40, h = 45;
+    const m = mod(p.app, round1(clamp(px - w / 2, 0, 100 - w)), round1(clamp(py - 4, 0, 100 - h)), w, h);
+    ws().modules.push(m);
+    selected = { kind: "slot", id: m.id };
+  }
+  render();
+});
+
+$("applyBtn").addEventListener("click", () => {
+  if (!native) return toast("Apply works in the Wormod Mac app");
+  $("applyBtn").disabled = true;
+  toast(`Applying “${ws().name}”…`);
+  native.postMessage({ type: "apply", recipe: toRecipe(ws()) });
+});
+
+/* ---------- workspace switcher ---------- */
+const menu = $("wsMenu");
+const closeMenu = () => { menu.classList.remove("show"); $("wsSwitch").classList.remove("open"); };
+$("wsSwitch").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("wsSwitch").classList.toggle("open", menu.classList.toggle("show"));
+});
+menu.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    const i = Number(del.dataset.del);
+    if (!confirm(`Delete mode “${state.workspaces[i].name}”?`)) return;
+    state.workspaces.splice(i, 1);
+    if (state.current >= i) state.current = Math.max(0, state.current - 1);
+    selected = null; menuSlot = null;
+    return render();
+  }
+  const item = e.target.closest(".ws-item");
+  if (!item) return;
+  state.current = Number(item.dataset.i);
+  selected = null; menuSlot = null;
+  closeMenu();
+  render();
+});
+menu.addEventListener("dblclick", (e) => {
+  const item = e.target.closest(".ws-item");
+  if (!item) return;
+  const w = state.workspaces[Number(item.dataset.i)];
+  const name = prompt("Mode name", w.name);
+  if (name && name.trim()) { w.name = name.trim(); render(); }
+});
+document.addEventListener("click", closeMenu);
+$("addWs").addEventListener("click", () => {
+  const name = prompt("New mode name", "New Mode");
+  if (!name || !name.trim()) return;
+  state.workspaces.push({ id: uid(), name: name.trim(), modules: [mod(null, 0, 0, 100, 100)], floats: [] });
+  state.current = state.workspaces.length - 1;
+  selected = null; menuSlot = null;
+  closeMenu();
+  render();
+});
+
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Delete" || e.key === "Backspace") && selected && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) {
+    if (selected.kind === "float") removeFloat(selected.id); else removeModule(selected.id);
+    render();
+  }
+  if (e.key === "Escape") { selected = null; menuSlot = null; closeMenu(); render(); }
+});
+
+/* ---------- clock ---------- */
+function tickClock() {
+  const d = new Date();
+  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+  $("mbClock").textContent = `${day}  ${hm}`;
+  desk.querySelectorAll('[data-live="time"]').forEach((n) => (n.textContent = hm));
+  desk.querySelectorAll('[data-live="date"]').forEach((n) => (n.textContent = day));
+}
+setInterval(tickClock, 15000);
+
+/* ---------- utils ---------- */
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function round1(v) { return Math.round(v * 10) / 10; }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+renderDock();
+updateDockFade();
+render();
+</script>
+</body>
+</html>

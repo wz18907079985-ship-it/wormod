@@ -1,0 +1,8 @@
+.DS_Store
+
+# local code-signing key and certificate
+app/signing/
+
+# build output
+app/build/
+app/AppIcon.icns
