@@ -6,3 +6,4 @@ app/signing/
 # build output
 app/build/
 app/AppIcon.icns
+_shots/
